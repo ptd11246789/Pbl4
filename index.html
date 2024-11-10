@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera IP Video Stream</title>
+    <style>
+        .container {
+            text-align: center;
+            margin: 20px;
+        }
+        video {
+            display: block;
+            margin: 0 auto;
+        }
+        .buttons {
+            margin-top: 10px;
+        }
+        button {
+            padding: 10px 15px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Live Stream from IP Camera</h2>
+        <video id="video" controls autoplay></video>
+
+        <h2>Image Capture</h2>
+        <button id="capture">Capture Image</button>
+        <button id="upload" disabled>Upload Image</button>
+        <canvas id="canvas" style="display:none;"></canvas>
+        
+        <h2>Video Recording</h2>
+        <button id="startRecording">Start Recording</button>
+        <button id="stopRecording" disabled>Stop Recording</button>
+        <video id="recordedVideo" controls style="display:none;"></video>
+
+        <form id="uploadForm" action="upload.php" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="image" id="imageData">
+            <input type="hidden" name="video" id="videoData">
+            <input type="submit" value="Submit Upload" style="display:none;"> 
+        </form>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureButton = document.getElementById('capture');
+        const uploadButton = document.getElementById('upload');
+        const imageDataInput = document.getElementById('imageData');
+        let mediaRecorder;
+        let recordedChunks = [];
+
+        // Thay thế URL bằng đường dẫn của camera IP hỗ trợ HLS hoặc HTTP
+        videoElement.src = "http://192.168.1.11:554/stream"; // Thay thế bằng URL thực của luồng
+
+        // Khởi tạo MediaRecorder sau khi luồng video đã sẵn sàng
+        videoElement.addEventListener('loadedmetadata', () => {
+            const stream = videoElement.captureStream();
+            mediaRecorder = new MediaRecorder(stream);
+            
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    recordedChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/mp4' });
+                const url = URL.createObjectURL(blob);
+                const recordedVideo = document.getElementById('recordedVideo');
+                recordedVideo.src = url;
+                recordedVideo.style.display = 'block';
+                document.getElementById('videoData').value = blob;
+                uploadButton.disabled = false;
+            };
+        });
+
+        captureButton.addEventListener('click', () => {
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+            const imageData = canvas.toDataURL('image/png');
+            imageDataInput.value = imageData;
+            uploadButton.disabled = false;
+
+            // Nếu video đang ghi, dừng ghi
+             if (mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop(); // Dừng ghi video nếu đang ghi
+                 document.getElementById('startRecording').disabled = false;
+                 document.getElementById('stopRecording').disabled = true;
+             }
+        });
+
+        // Ghi video
+        document.getElementById('startRecording').addEventListener('click', () => {
+            recordedChunks = [];
+            mediaRecorder.start();
+            document.getElementById('startRecording').disabled = true;
+            document.getElementById('stopRecording').disabled = false;
+        });
+
+        document.getElementById('stopRecording').addEventListener('click', () => {
+            mediaRecorder.stop();
+            document.getElementById('startRecording').disabled = false;
+            document.getElementById('stopRecording').disabled = true;
+        });
+
+        uploadButton.addEventListener('click', () => {
+            document.getElementById('uploadForm').submit();
+        });
+    </script>
+</body>
+</html>
